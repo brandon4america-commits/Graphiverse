@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+title: "Graphiverse Cinematic Suite: Time-Domain Stellar Evolution, Concentric Hydrostatic Nucleosynthesis, and Prebiotic Interstellar Seeding"
+message: "If you use this software or whitepaper architecture in your research, please cite it using the metadata below."
+type: software
+authors:
+  - family-names: "Gibbins"
+    given-names: "Brandon Sypherd"
+repository-code: "https://github.com/brandon4america-commits/Graphiverse"
+version: 2.4.0
+date-released: "2026-11-04"
+license: MIT
+keywords:
+  - stellar-evolution
+  - nucleosynthesis
+  - astrovisualization
+  - webgl
+  - epistemic-provenance
+  - astrobiology
