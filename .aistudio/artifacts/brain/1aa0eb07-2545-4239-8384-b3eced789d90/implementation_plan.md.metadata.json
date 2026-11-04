@@ -1,0 +1,6 @@
+{
+  "summary": "Implementation plan for integrating the Graphiverse Stellar Evolution & Nucleosynthesis Academic Whitepaper kit into AcademicWhitepaperModal, StellarNucleosynthesisWorkbench, index.css (print & glassmorphism styles), and server.ts (upstream 429 quota status preservation and bounded retry/fallback).",
+  "updatedAt": "2026-11-04T07:37:12.639537753Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

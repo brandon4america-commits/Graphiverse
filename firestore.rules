@@ -1,0 +1,257 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        (request.auth.token.email == 'brandon4america@gmail.com' &&
+          request.auth.token.email_verified == true)
+      );
+    }
+
+    // Entity Validators
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1024)) &&
+        data.role in ['researcher', 'admin'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidDiscovery(data) {
+      return data.keys().hasAll([
+          'ownerId', 'ownerName', 'label', 'scaleRegime', 'clusterId',
+          'coordinatesRaDec', 'distanceLabel', 'biosignatureNotes',
+          'confidence', 'isPublic', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'ownerId', 'ownerName', 'label', 'scaleRegime', 'clusterId',
+          'coordinatesRaDec', 'distanceLabel', 'biosignatureNotes',
+          'pubchemCid', 'uniprotId', 'pdbId', 'confidence', 'isPublic',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 &&
+        data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 120 &&
+        data.label is string && data.label.size() >= 1 && data.label.size() <= 180 &&
+        data.scaleRegime is string && data.scaleRegime.size() >= 1 && data.scaleRegime.size() <= 80 &&
+        data.clusterId is string && data.clusterId.size() >= 1 && data.clusterId.size() <= 100 &&
+        data.coordinatesRaDec is string && data.coordinatesRaDec.size() >= 1 && data.coordinatesRaDec.size() <= 120 &&
+        data.distanceLabel is string && data.distanceLabel.size() >= 1 && data.distanceLabel.size() <= 120 &&
+        data.biosignatureNotes is string && data.biosignatureNotes.size() <= 4000 &&
+        (!('pubchemCid' in data) || (data.pubchemCid is int && data.pubchemCid >= 1 && data.pubchemCid <= 999999999)) &&
+        (!('uniprotId' in data) || (data.uniprotId is string && data.uniprotId.size() <= 40)) &&
+        (!('pdbId' in data) || (data.pdbId is string && data.pdbId.size() <= 20)) &&
+        data.confidence is number && data.confidence >= 0 && data.confidence <= 1 &&
+        data.isPublic is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidExpedition(data) {
+      return data.keys().hasAll([
+          'ownerId', 'ownerName', 'title', 'clusterId', 'lens', 'notes',
+          'lyriaModel', 'lyriaPrompt', 'coherenceScore', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'ownerId', 'ownerName', 'title', 'clusterId', 'lens', 'notes',
+          'lyriaModel', 'lyriaPrompt', 'lyriaLyrics', 'coherenceScore',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 &&
+        data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 120 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 180 &&
+        data.clusterId is string && data.clusterId.size() >= 1 && data.clusterId.size() <= 100 &&
+        data.lens is string && data.lens.size() >= 1 && data.lens.size() <= 40 &&
+        data.notes is string && data.notes.size() <= 4000 &&
+        data.lyriaModel is string && data.lyriaModel.size() >= 1 && data.lyriaModel.size() <= 80 &&
+        data.lyriaPrompt is string && data.lyriaPrompt.size() <= 2000 &&
+        (!('lyriaLyrics' in data) || (data.lyriaLyrics is string && data.lyriaLyrics.size() <= 6000)) &&
+        data.coherenceScore is number && data.coherenceScore >= 0 && data.coherenceScore <= 1 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidChatSession(data) {
+      return data.keys().hasAll([
+          'ownerId', 'title', 'model', 'persona', 'messagesJson',
+          'messageCount', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'ownerId', 'title', 'model', 'persona', 'messagesJson',
+          'messageCount', 'createdAt', 'updatedAt'
+        ]) &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 180 &&
+        data.model is string && data.model.size() >= 1 && data.model.size() <= 80 &&
+        data.persona is string && data.persona.size() >= 1 && data.persona.size() <= 80 &&
+        data.messagesJson is string && data.messagesJson.size() >= 2 && data.messagesJson.size() <= 250000 &&
+        data.messageCount is int && data.messageCount >= 0 && data.messageCount <= 500 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSharedMap(data) {
+      return data.keys().hasAll([
+          'ownerId', 'ownerName', 'title', 'summary', 'nodeCount',
+          'clusterCount', 'graphSnapshotJson', 'isPublic', 'starCount',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'ownerId', 'ownerName', 'title', 'summary', 'nodeCount',
+          'clusterCount', 'graphSnapshotJson', 'isPublic', 'starCount',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 &&
+        data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 120 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 180 &&
+        data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 4000 &&
+        data.nodeCount is int && data.nodeCount >= 1 && data.nodeCount <= 2000 &&
+        data.clusterCount is int && data.clusterCount >= 1 && data.clusterCount <= 200 &&
+        data.graphSnapshotJson is string && data.graphSnapshotJson.size() >= 2 && data.graphSnapshotJson.size() <= 500000 &&
+        data.isPublic is bool &&
+        data.starCount is int && data.starCount >= 0 && data.starCount <= 1000000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // 1. User Profiles
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidUserProfile(request.resource.data) &&
+        request.resource.data.uid == userId &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time &&
+        (request.resource.data.role == 'researcher' || isAdmin());
+      allow update: if (isOwner(userId) || isAdmin()) &&
+        isValidUserProfile(request.resource.data) &&
+        request.resource.data.uid == resource.data.uid &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.updatedAt == request.time &&
+        (request.resource.data.role == resource.data.role || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // 2. Celestial Discoveries
+    match /celestialDiscoveries/{discoveryId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.isPublic == true ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        isValidId(discoveryId) &&
+        isValidDiscovery(request.resource.data) &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        (resource.data.ownerId == request.auth.uid || isAdmin()) &&
+        isValidDiscovery(request.resource.data) &&
+        request.resource.data.ownerId == resource.data.ownerId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    // 3. Cosmic Expeditions & Lyria Soundtracks
+    match /expeditions/{expeditionId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        isValidId(expeditionId) &&
+        isValidExpedition(request.resource.data) &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        (resource.data.ownerId == request.auth.uid || isAdmin()) &&
+        isValidExpedition(request.resource.data) &&
+        request.resource.data.ownerId == resource.data.ownerId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    // 4. Multi-Turn Chat Sessions
+    match /chatSessions/{sessionId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        isValidId(sessionId) &&
+        isValidChatSession(request.resource.data) &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        (resource.data.ownerId == request.auth.uid || isAdmin()) &&
+        isValidChatSession(request.resource.data) &&
+        request.resource.data.ownerId == resource.data.ownerId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    // 5. Community Shared Universe Maps
+    match /sharedMaps/{mapId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.isPublic == true ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        isValidId(mapId) &&
+        isValidSharedMap(request.resource.data) &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.starCount == 0 &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+      allow update: if isSignedIn() && (
+        (
+          (resource.data.ownerId == request.auth.uid || isAdmin()) &&
+          isValidSharedMap(request.resource.data) &&
+          request.resource.data.ownerId == resource.data.ownerId &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.updatedAt == request.time
+        ) ||
+        (
+          resource.data.isPublic == true &&
+          isValidSharedMap(request.resource.data) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['starCount', 'updatedAt']) &&
+          request.resource.data.starCount == resource.data.starCount + 1 &&
+          request.resource.data.updatedAt == request.time
+        )
+      );
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+  }
+}

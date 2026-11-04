@@ -1,0 +1,11 @@
+{
+  "name": "Graphiverse Cinematic Suite",
+  "description": "Known Universe: A Multi-Scale WebGL Optical Atlas, Federated Astrobiological Bioinformatics Pipeline, and Autonomous Multimodal Agentic Observatory with Academic Whitepaper Suite.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

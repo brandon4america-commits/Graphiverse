@@ -1,0 +1,119 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Personal observatory researcher profile and role metadata",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "Verified researcher email" },
+        "displayName": { "type": "string", "description": "Researcher display name" },
+        "photoURL": { "type": "string", "description": "Avatar photo URL" },
+        "role": { "type": "string", "enum": ["researcher", "admin"], "description": "Observatory role" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Update timestamp" }
+      },
+      "required": ["uid", "email", "displayName", "role", "createdAt", "updatedAt"]
+    },
+    "CelestialDiscovery": {
+      "title": "CelestialDiscovery",
+      "description": "Custom discovered celestial system, exoplanet, or annotated star chart node",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "description": "Creator UID" },
+        "ownerName": { "type": "string", "description": "Creator display name" },
+        "label": { "type": "string", "description": "Celestial object name" },
+        "scaleRegime": { "type": "string", "description": "Cosmic scale regime" },
+        "clusterId": { "type": "string", "description": "Target cosmic sector ID" },
+        "coordinatesRaDec": { "type": "string", "description": "Celestial coordinates RA/Dec" },
+        "distanceLabel": { "type": "string", "description": "Distance from Sol" },
+        "biosignatureNotes": { "type": "string", "description": "Astrobiological and spectral notes" },
+        "pubchemCid": { "type": "number", "description": "Associated PubChem CID" },
+        "uniprotId": { "type": "string", "description": "Associated UniProt accession" },
+        "pdbId": { "type": "string", "description": "Associated RCSB PDB ID" },
+        "confidence": { "type": "number", "description": "Observational confidence 0..1" },
+        "isPublic": { "type": "boolean", "description": "Whether visible to community" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "ownerName", "label", "scaleRegime", "clusterId", "coordinatesRaDec", "distanceLabel", "biosignatureNotes", "confidence", "isPublic", "createdAt", "updatedAt"]
+    },
+    "CosmicExpedition": {
+      "title": "CosmicExpedition",
+      "description": "Saved cosmic expedition keyframe sequence and Lyria soundtrack cue",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "title": { "type": "string" },
+        "clusterId": { "type": "string" },
+        "lens": { "type": "string" },
+        "notes": { "type": "string" },
+        "lyriaModel": { "type": "string" },
+        "lyriaPrompt": { "type": "string" },
+        "lyriaLyrics": { "type": "string" },
+        "coherenceScore": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "ownerName", "title", "clusterId", "lens", "notes", "lyriaModel", "lyriaPrompt", "coherenceScore", "createdAt", "updatedAt"]
+    },
+    "ChatSession": {
+      "title": "ChatSession",
+      "description": "Multi-turn astronomical and astrobiological Gemini research chat log",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "title": { "type": "string" },
+        "model": { "type": "string" },
+        "persona": { "type": "string" },
+        "messagesJson": { "type": "string", "description": "Serialized JSON array of chat messages and citations" },
+        "messageCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "title", "model", "persona", "messagesJson", "messageCount", "createdAt", "updatedAt"]
+    },
+    "SharedUniverseMap": {
+      "title": "SharedUniverseMap",
+      "description": "Community shared universe map and observational notes",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "nodeCount": { "type": "number" },
+        "clusterCount": { "type": "number" },
+        "graphSnapshotJson": { "type": "string", "description": "Serialized GraphData JSON" },
+        "isPublic": { "type": "boolean" },
+        "starCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "ownerName", "title", "summary", "nodeCount", "clusterCount", "graphSnapshotJson", "isPublic", "starCount", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private researcher profiles"
+    },
+    "/celestialDiscoveries/{discoveryId}": {
+      "schema": { "$ref": "#/entities/CelestialDiscovery" },
+      "description": "Discovered celestial systems and annotated star charts"
+    },
+    "/expeditions/{expeditionId}": {
+      "schema": { "$ref": "#/entities/CosmicExpedition" },
+      "description": "Saved cosmic expeditions and Lyria soundtracks"
+    },
+    "/chatSessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/ChatSession" },
+      "description": "Saved multi-turn Gemini research threads"
+    },
+    "/sharedMaps/{mapId}": {
+      "schema": { "$ref": "#/entities/SharedUniverseMap" },
+      "description": "Community shared universe maps"
+    }
+  }
+}
