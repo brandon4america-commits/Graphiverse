@@ -13,6 +13,7 @@ import LyriaMusicStudio from './components/LyriaMusicStudio';
 import ObservatoryVaultModal from './components/ObservatoryVaultModal';
 import { ExoplanetSimulationWorkbench } from './components/ExoplanetSimulationWorkbench';
 import { StellarNucleosynthesisWorkbench } from './components/StellarNucleosynthesisWorkbench';
+import RelativisticMergerWorkbench from './components/RelativisticMergerWorkbench';
 import { INITIAL_GRAPH_DATA, INITIAL_CUSTOM_SCENES } from './constants';
 import {
   SceneManifest,
@@ -168,6 +169,7 @@ const App: React.FC = () => {
   const [isBioscienceOpen, setIsBioscienceOpen] = useState(false);
   const [isExoplanetSimOpen, setIsExoplanetSimOpen] = useState(false);
   const [isStellarSimOpen, setIsStellarSimOpen] = useState(false);
+  const [isMergerSimOpen, setIsMergerSimOpen] = useState(false);
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
   const [isLiveVoiceOpen, setIsLiveVoiceOpen] = useState(false);
   const [isLyriaOpen, setIsLyriaOpen] = useState(false);
@@ -1572,6 +1574,7 @@ const App: React.FC = () => {
         onOpenBioscience={() => setIsBioscienceOpen(true)}
         onOpenExoplanetSim={() => setIsExoplanetSimOpen(true)}
         onOpenStellarSim={() => setIsStellarSimOpen(true)}
+        onOpenMergerSim={() => setIsMergerSimOpen(true)}
         onOpenChatbot={() => setIsChatbotOpen(true)}
         onOpenLiveVoice={() => setIsLiveVoiceOpen(true)}
         onOpenLyriaStudio={() => setIsLyriaOpen(true)}
@@ -1684,6 +1687,36 @@ const App: React.FC = () => {
       <StellarNucleosynthesisWorkbench
         isOpen={isStellarSimOpen}
         onClose={() => setIsStellarSimOpen(false)}
+        user={firebaseUser}
+        nodes={graphData.nodes}
+        clusters={graphData.clusters}
+        onSelectAtlasNode={node => {
+          handleSelectNode(node);
+          setLens('ORBIT');
+        }}
+        onFocusAtlasCluster={clusterId => {
+          const idx = graphData.clusters.findIndex(c => c.id === clusterId);
+          if (idx >= 0) handleSelectClusterIdx(idx);
+          setLens('ORBIT');
+        }}
+        onAddDiscoveryToAtlas={newNode => {
+          setGraphData(prev => ({
+            ...prev,
+            nodes: [...prev.nodes, newNode]
+          }));
+          setSelectedNode(newNode);
+          setEvolutionPulseCount(prev => prev + 1);
+        }}
+        onOpenMergerLab={() => {
+          setIsStellarSimOpen(false);
+          setIsMergerSimOpen(true);
+        }}
+      />
+
+      {/* Relativistic Black Hole & Gravitational-Wave Merger Lab */}
+      <RelativisticMergerWorkbench
+        isOpen={isMergerSimOpen}
+        onClose={() => setIsMergerSimOpen(false)}
         user={firebaseUser}
         nodes={graphData.nodes}
         clusters={graphData.clusters}

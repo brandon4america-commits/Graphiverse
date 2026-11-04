@@ -1,14 +1,26 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default deny catch-all
+    // Pillar 1: Global Default-Deny Safety Net
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Core Helpers
+    // Core Primitives
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
     function isSignedIn() {
       return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
     }
 
     function isOwner(userId) {
@@ -20,15 +32,14 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && (
+      return isVerifiedUser() && (
+        request.auth.token.email == 'brandon4america@gmail.com' ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-        (request.auth.token.email == 'brandon4america@gmail.com' &&
-          request.auth.token.email_verified == true)
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
     }
 
-    // Entity Validators
+    // Validation Blueprints
     function isValidUserProfile(data) {
       return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
         data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt', 'updatedAt']) &&
@@ -139,119 +150,207 @@ service cloud.firestore {
 
     // 1. User Profiles
     match /users/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
       allow list: if isAdmin();
-      allow create: if isOwner(userId) &&
+      allow create: if isVerifiedUser() &&
         isValidId(userId) &&
-        isValidUserProfile(request.resource.data) &&
-        request.resource.data.uid == userId &&
-        request.resource.data.createdAt == request.time &&
-        request.resource.data.updatedAt == request.time &&
-        (request.resource.data.role == 'researcher' || isAdmin());
-      allow update: if (isOwner(userId) || isAdmin()) &&
-        isValidUserProfile(request.resource.data) &&
-        request.resource.data.uid == resource.data.uid &&
-        request.resource.data.createdAt == resource.data.createdAt &&
-        request.resource.data.updatedAt == request.time &&
-        (request.resource.data.role == resource.data.role || isAdmin());
-      allow delete: if isAdmin();
+        isOwner(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == userId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (incoming().role == 'researcher' || isAdmin());
+      allow update: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) && (
+          // Action 1: Owner profile sync / update (role immutable)
+          (
+            isOwner(userId) &&
+            incoming().uid == existing().uid &&
+            incoming().role == existing().role &&
+            (incoming().createdAt == existing().createdAt || incoming().createdAt == request.time) &&
+            incoming().updatedAt == request.time &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['email', 'displayName', 'photoURL', 'createdAt', 'updatedAt'])
+          ) ||
+          // Action 2: Admin override
+          (
+            isAdmin() &&
+            incoming().uid == existing().uid &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin();
     }
 
     // 2. Celestial Discoveries
     match /celestialDiscoveries/{discoveryId} {
-      allow get, list: if isSignedIn() && (
-        resource.data.ownerId == request.auth.uid ||
-        resource.data.isPublic == true ||
+      allow get: if isSignedIn() && isValidId(discoveryId) && (
+        existing().ownerId == request.auth.uid ||
+        existing().isPublic == true ||
         isAdmin()
       );
-      allow create: if isSignedIn() &&
+      allow list: if isSignedIn() && (
+        existing().ownerId == request.auth.uid ||
+        existing().isPublic == true ||
+        isAdmin()
+      );
+      allow create: if isVerifiedUser() &&
         isValidId(discoveryId) &&
-        isValidDiscovery(request.resource.data) &&
-        request.resource.data.ownerId == request.auth.uid &&
-        request.resource.data.createdAt == request.time &&
-        request.resource.data.updatedAt == request.time;
-      allow update: if isSignedIn() &&
-        (resource.data.ownerId == request.auth.uid || isAdmin()) &&
-        isValidDiscovery(request.resource.data) &&
-        request.resource.data.ownerId == resource.data.ownerId &&
-        request.resource.data.createdAt == resource.data.createdAt &&
-        request.resource.data.updatedAt == request.time;
-      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+        isValidDiscovery(incoming()) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() &&
+        isValidId(discoveryId) &&
+        isValidDiscovery(incoming()) && (
+          (
+            existing().ownerId == request.auth.uid &&
+            incoming().ownerId == existing().ownerId &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'ownerName', 'label', 'scaleRegime', 'clusterId', 'coordinatesRaDec',
+              'distanceLabel', 'biosignatureNotes', 'pubchemCid', 'uniprotId',
+              'pdbId', 'confidence', 'isPublic', 'updatedAt'
+            ])
+          ) ||
+          (
+            isAdmin() &&
+            incoming().ownerId == existing().ownerId &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time
+          )
+        );
+      allow delete: if isVerifiedUser() && isValidId(discoveryId) && (existing().ownerId == request.auth.uid || isAdmin());
     }
 
     // 3. Cosmic Expeditions & Lyria Soundtracks
     match /expeditions/{expeditionId} {
-      allow get, list: if isSignedIn() && (
-        resource.data.ownerId == request.auth.uid ||
+      allow get: if isSignedIn() && isValidId(expeditionId) && (
+        existing().ownerId == request.auth.uid ||
         isAdmin()
       );
-      allow create: if isSignedIn() &&
+      allow list: if isSignedIn() && (
+        existing().ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isVerifiedUser() &&
         isValidId(expeditionId) &&
-        isValidExpedition(request.resource.data) &&
-        request.resource.data.ownerId == request.auth.uid &&
-        request.resource.data.createdAt == request.time &&
-        request.resource.data.updatedAt == request.time;
-      allow update: if isSignedIn() &&
-        (resource.data.ownerId == request.auth.uid || isAdmin()) &&
-        isValidExpedition(request.resource.data) &&
-        request.resource.data.ownerId == resource.data.ownerId &&
-        request.resource.data.createdAt == resource.data.createdAt &&
-        request.resource.data.updatedAt == request.time;
-      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+        isValidExpedition(incoming()) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() &&
+        isValidId(expeditionId) &&
+        isValidExpedition(incoming()) && (
+          (
+            existing().ownerId == request.auth.uid &&
+            incoming().ownerId == existing().ownerId &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'ownerName', 'title', 'clusterId', 'lens', 'notes',
+              'lyriaModel', 'lyriaPrompt', 'lyriaLyrics', 'coherenceScore', 'updatedAt'
+            ])
+          ) ||
+          (
+            isAdmin() &&
+            incoming().ownerId == existing().ownerId &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time
+          )
+        );
+      allow delete: if isVerifiedUser() && isValidId(expeditionId) && (existing().ownerId == request.auth.uid || isAdmin());
     }
 
     // 4. Multi-Turn Chat Sessions
     match /chatSessions/{sessionId} {
-      allow get, list: if isSignedIn() && (
-        resource.data.ownerId == request.auth.uid ||
+      allow get: if isSignedIn() && isValidId(sessionId) && (
+        existing().ownerId == request.auth.uid ||
         isAdmin()
       );
-      allow create: if isSignedIn() &&
+      allow list: if isSignedIn() && (
+        existing().ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isVerifiedUser() &&
         isValidId(sessionId) &&
-        isValidChatSession(request.resource.data) &&
-        request.resource.data.ownerId == request.auth.uid &&
-        request.resource.data.createdAt == request.time &&
-        request.resource.data.updatedAt == request.time;
-      allow update: if isSignedIn() &&
-        (resource.data.ownerId == request.auth.uid || isAdmin()) &&
-        isValidChatSession(request.resource.data) &&
-        request.resource.data.ownerId == resource.data.ownerId &&
-        request.resource.data.createdAt == resource.data.createdAt &&
-        request.resource.data.updatedAt == request.time;
-      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+        isValidChatSession(incoming()) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() &&
+        isValidId(sessionId) &&
+        isValidChatSession(incoming()) && (
+          (
+            existing().ownerId == request.auth.uid &&
+            incoming().ownerId == existing().ownerId &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'title', 'model', 'persona', 'messagesJson', 'messageCount', 'updatedAt'
+            ])
+          ) ||
+          (
+            isAdmin() &&
+            incoming().ownerId == existing().ownerId &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time
+          )
+        );
+      allow delete: if isVerifiedUser() && isValidId(sessionId) && (existing().ownerId == request.auth.uid || isAdmin());
     }
 
     // 5. Community Shared Universe Maps
     match /sharedMaps/{mapId} {
-      allow get, list: if isSignedIn() && (
-        resource.data.ownerId == request.auth.uid ||
-        resource.data.isPublic == true ||
+      allow get: if isSignedIn() && isValidId(mapId) && (
+        existing().ownerId == request.auth.uid ||
+        existing().isPublic == true ||
         isAdmin()
       );
-      allow create: if isSignedIn() &&
-        isValidId(mapId) &&
-        isValidSharedMap(request.resource.data) &&
-        request.resource.data.ownerId == request.auth.uid &&
-        request.resource.data.starCount == 0 &&
-        request.resource.data.createdAt == request.time &&
-        request.resource.data.updatedAt == request.time;
-      allow update: if isSignedIn() && (
-        (
-          (resource.data.ownerId == request.auth.uid || isAdmin()) &&
-          isValidSharedMap(request.resource.data) &&
-          request.resource.data.ownerId == resource.data.ownerId &&
-          request.resource.data.createdAt == resource.data.createdAt &&
-          request.resource.data.updatedAt == request.time
-        ) ||
-        (
-          resource.data.isPublic == true &&
-          isValidSharedMap(request.resource.data) &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['starCount', 'updatedAt']) &&
-          request.resource.data.starCount == resource.data.starCount + 1 &&
-          request.resource.data.updatedAt == request.time
-        )
+      allow list: if isSignedIn() && (
+        existing().ownerId == request.auth.uid ||
+        existing().isPublic == true ||
+        isAdmin()
       );
-      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser() &&
+        isValidId(mapId) &&
+        isValidSharedMap(incoming()) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().starCount == 0 &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() &&
+        isValidId(mapId) &&
+        isValidSharedMap(incoming()) && (
+          // Action 1: Owner metadata update
+          (
+            existing().ownerId == request.auth.uid &&
+            incoming().ownerId == existing().ownerId &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'ownerName', 'title', 'summary', 'nodeCount', 'clusterCount',
+              'graphSnapshotJson', 'isPublic', 'starCount', 'updatedAt'
+            ])
+          ) ||
+          // Action 2: Community star increment on public map
+          (
+            existing().isPublic == true &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['starCount', 'updatedAt']) &&
+            incoming().starCount == existing().starCount + 1 &&
+            incoming().updatedAt == request.time
+          ) ||
+          // Action 3: Admin override
+          (
+            isAdmin() &&
+            incoming().ownerId == existing().ownerId &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time
+          )
+        );
+      allow delete: if isVerifiedUser() && isValidId(mapId) && (existing().ownerId == request.auth.uid || isAdmin());
     }
   }
 }

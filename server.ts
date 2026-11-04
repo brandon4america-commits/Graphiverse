@@ -1780,7 +1780,87 @@ Provide a rigorous astrophysical and astrobiological synthesis including:
   }
 });
 
+// 4j. Relativistic Black Hole & Gravitational-Wave Merger Synthesis
+app.post('/api/gemini/gravitational-wave-synthesis', async (req, res) => {
+  try {
+    const {
+      eventDesignation = 'GW150914',
+      mass1Solar = 35.6,
+      mass2Solar = 30.6,
+      spin1 = 0.32,
+      spin2 = 0.44,
+      inclinationDeg = 32,
+      distanceMpc = 440,
+      derivedMetrics = {}
+    } = req.body || {};
+
+    const ai = getGenAI();
+    const prompt = `Analyze the relativistic binary compact coalescence ${eventDesignation}:
+- Primary Mass M1: ${mass1Solar} M_sun (Kerr spin chi1 = ${spin1})
+- Secondary Mass M2: ${mass2Solar} M_sun (Kerr spin chi2 = ${spin2})
+- Orbital Inclination: ${inclinationDeg} deg, Luminosity Distance: ${distanceMpc} Mpc
+- Derived Post-Newtonian & Kerr Metrics: ${JSON.stringify(derivedMetrics)}
+
+Provide a rigorous, peer-reviewed relativistic astrophysics synthesis covering:
+1. Relativistic regime & Kerr ISCO dynamics
+2. Inspiral-Merger-Ringdown (IMR) waveform morphology & quasi-normal modes
+3. Final remnant Kerr ergosphere, frame dragging & Blandford-Znajek jet potential
+4. Multi-messenger & r-process nucleosynthesis counterparts (if neutron star components are present, or vacuum BBH constraints)
+5. Detector observability notes across LIGO/Virgo/KAGRA and Cosmic Explorer.
+Never claim heuristic confidence scores are calibrated detection probabilities.`;
+
+    const response = await callWithBoundedRetry(() =>
+      ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              relativisticRegimeSummary: { type: Type.STRING },
+              waveformMorphologyAnalysis: { type: Type.STRING },
+              remnantKerrHorizonsAndJets: { type: Type.STRING },
+              multiMessengerCounterparts: { type: Type.STRING },
+              detectorObservabilityNotes: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              recommendedAtlasNodes: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              confidenceScore: { type: Type.NUMBER }
+            },
+            required: [
+              'relativisticRegimeSummary',
+              'waveformMorphologyAnalysis',
+              'remnantKerrHorizonsAndJets',
+              'multiMessengerCounterparts',
+              'detectorObservabilityNotes',
+              'recommendedAtlasNodes',
+              'confidenceScore'
+            ]
+          }
+        }
+      })
+    );
+
+    const data = JSON.parse(response.text || '{}');
+    res.json(data);
+  } catch (error: unknown) {
+    const errInfo = extractUpstreamHttpStatus(error);
+    res.status(errInfo.status).json({
+      error: errInfo.message,
+      code: errInfo.code,
+      status: errInfo.status,
+      fallbackAvailable: true
+    });
+  }
+});
+
 // ============================================================================
+
 
 // 5. HTTP + WEBSOCKET SERVER STARTUP (/ws/live GEMINI 3.8 LIVE BRIDGE)
 // ============================================================================

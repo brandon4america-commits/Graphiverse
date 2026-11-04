@@ -126,6 +126,7 @@ interface DirectorUIProps {
   onOpenBioscience?: () => void;
   onOpenExoplanetSim?: () => void;
   onOpenStellarSim?: () => void;
+  onOpenMergerSim?: () => void;
   onOpenChatbot?: () => void;
   onOpenLiveVoice?: () => void;
   onOpenLyriaStudio?: () => void;
@@ -252,6 +253,7 @@ const DirectorUI: React.FC<DirectorUIProps> = ({
   onOpenBioscience,
   onOpenExoplanetSim,
   onOpenStellarSim,
+  onOpenMergerSim,
   onOpenChatbot,
   onOpenLiveVoice,
   onOpenLyriaStudio,
@@ -521,6 +523,15 @@ const DirectorUI: React.FC<DirectorUIProps> = ({
           >
             <Flame className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden md:inline">Stellar Lab</span>
+          </button>
+
+          <button
+            onClick={onOpenMergerSim}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-slate-900/90 text-slate-200 border border-white/10 hover:border-cyan-400/50 hover:text-white transition cursor-pointer"
+            title="Open Relativistic Black Hole & Gravitational-Wave Merger Lab"
+          >
+            <Orbit className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden md:inline">GW Lab</span>
           </button>
 
           <button

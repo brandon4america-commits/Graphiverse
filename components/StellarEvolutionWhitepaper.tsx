@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BookOpen,
   CheckCircle2,
@@ -8,9 +8,19 @@ import {
   Database,
   ExternalLink,
   Cpu,
-  FileText
+  FileText,
+  Activity,
+  RotateCcw
 } from 'lucide-react';
 import { IsotopeYieldDatum } from './StellarNucleosynthesisWorkbench';
+import {
+  BenchmarkLedgerEntry,
+  getBenchmarkLedger,
+  subscribeBenchmarkLedger,
+  recordEmpiricalMeasurement,
+  resetBenchmarkLedger,
+  computeMesaReferenceTrackDeviation
+} from '../services/empiricalBenchmarkStore';
 
 export interface StellarModelSnapshot {
   presetId: string;
@@ -294,6 +304,18 @@ export const StellarEvolutionWhitepaper: React.FC<StellarEvolutionWhitepaperProp
   onSelectSection
 }) => {
   const [internalSectionId, setInternalSectionId] = useState<string>(STELLAR_WHITEPAPER_TOC[0].id);
+  const [benchmarkRows, setBenchmarkRows] = useState<BenchmarkLedgerEntry[]>(() =>
+    getBenchmarkLedger()
+  );
+  const [isRunningBenchmark, setIsRunningBenchmark] = useState(false);
+
+  useEffect(() => {
+    setBenchmarkRows(getBenchmarkLedger());
+    return subscribeBenchmarkLedger(rows => {
+      setBenchmarkRows(rows);
+    });
+  }, []);
+
   const currentSectionId = controlledSectionId || internalSectionId;
 
   const handleJumpToSection = (id: string) => {
@@ -302,6 +324,70 @@ export const StellarEvolutionWhitepaper: React.FC<StellarEvolutionWhitepaperProp
     const el = document.getElementById(id);
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handleRunInlineBenchmarkHarness = async () => {
+    if (isRunningBenchmark) return;
+    setIsRunningBenchmark(true);
+    try {
+      // 1. Measure 60-frame requestAnimationFrame pacing in active browser session
+      const frameDeltas: number[] = [];
+      await new Promise<void>(resolve => {
+        let last = performance.now();
+        let count = 0;
+        const step = (now: number) => {
+          if (count > 0) {
+            frameDeltas.push(now - last);
+          }
+          last = now;
+          count++;
+          if (count <= 60) {
+            requestAnimationFrame(step);
+          } else {
+            resolve();
+          }
+        };
+        requestAnimationFrame(step);
+      });
+      const sortedFrames = [...frameDeltas].sort((a, b) => a - b);
+      const meanFrameMs =
+        frameDeltas.reduce((acc, v) => acc + v, 0) / Math.max(1, frameDeltas.length);
+      const p99FrameMs =
+        sortedFrames[Math.min(sortedFrames.length - 1, Math.floor(sortedFrames.length * 0.99))] ||
+        meanFrameMs;
+      const fps = 1000 / Math.max(0.1, meanFrameMs);
+      recordEmpiricalMeasurement(
+        'BM-01',
+        `Mean ${meanFrameMs.toFixed(2)} ms (${fps.toFixed(1)} FPS) · P99 ${p99FrameMs.toFixed(2)} ms (n=60 frames)`,
+        60
+      );
+
+      // 2. Measure 20-cycle D3 / parametric track & yield recomputation latency
+      const redrawSamples: number[] = [];
+      for (let i = 0; i < 20; i++) {
+        const t0 = performance.now();
+        computeMesaReferenceTrackDeviation();
+        const t1 = performance.now();
+        redrawSamples.push(t1 - t0);
+      }
+      const meanRedrawMs =
+        redrawSamples.reduce((a, b) => a + b, 0) / Math.max(1, redrawSamples.length);
+      recordEmpiricalMeasurement(
+        'BM-02',
+        `Mean ${meanRedrawMs.toFixed(3)} ms / sweep (n=20 synchronous commits)`,
+        20
+      );
+
+      // 3. Measure MESA L2 Track Residual across published anchor points
+      const mesaResidual = computeMesaReferenceTrackDeviation();
+      recordEmpiricalMeasurement(
+        'BM-05',
+        mesaResidual.formattedSummary,
+        mesaResidual.pointCount
+      );
+    } finally {
+      setIsRunningBenchmark(false);
     }
   };
 
@@ -997,24 +1083,49 @@ export const StellarEvolutionWhitepaper: React.FC<StellarEvolutionWhitepaperProp
           </div>
         </section>
 
-        {/* SECTION 5: EMPIRICAL BENCHMARK LEDGER (NOT MEASURED) */}
+        {/* SECTION 5: EMPIRICAL BENCHMARK LEDGER */}
         <section
           id="sec-stellar-5-benchmarks"
           className="p-6 rounded-lg bg-[#080D18]/90 border border-white/10 space-y-4 scroll-mt-4"
         >
-          <div className="border-b border-white/10 pb-3">
-            <div className="text-xs font-mono text-sky-400">Section 05</div>
-            <h2 className="text-lg font-display font-semibold text-slate-100 mt-0.5">
-              Empirical Benchmark &amp; Telemetry Ledger
-            </h2>
+          <div className="border-b border-white/10 pb-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-mono text-sky-400">Section 05</div>
+              <h2 className="text-lg font-display font-semibold text-slate-100 mt-0.5">
+                Empirical Benchmark &amp; Telemetry Ledger
+              </h2>
+            </div>
+
+            <div className="no-print flex items-center gap-2">
+              <button
+                onClick={handleRunInlineBenchmarkHarness}
+                disabled={isRunningBenchmark}
+                className="px-3 py-1.5 rounded text-xs font-mono font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>
+                  {isRunningBenchmark
+                    ? 'Measuring Runtime (60 Frames)...'
+                    : 'Run Live Browser Benchmark'}
+                </span>
+              </button>
+              <button
+                onClick={() => resetBenchmarkLedger()}
+                className="px-2.5 py-1.5 rounded text-xs font-mono text-slate-300 bg-slate-900 border border-white/10 hover:border-white/25 transition flex items-center gap-1 cursor-pointer"
+                title="Reset all rows to Not measured baseline"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset Baseline</span>
+              </button>
+            </div>
           </div>
 
           <p className="text-xs text-slate-300 leading-relaxed">
             In compliance with reproducible computational science standards, benchmark metrics for
-            the newly integrated Stellar Evolution &amp; Nucleosynthesis Time-Domain Simulator are
-            recorded as <code>Not measured</code> until automated, repeatable hardware/software
-            telemetry harnesses complete across the target protocols below. No synthetic FPS, API
-            latency, transition speed, or MESA L₂ accuracy numbers are fabricated.
+            the Stellar Evolution &amp; Relativistic Merger suite default to{' '}
+            <code>Not measured</code> until live, repeatable hardware/software telemetry harnesses
+            are executed in the browser or from the Relativistic Merger Lab. No synthetic FPS, API
+            latency, transition speed, or MESA L₂ accuracy numbers are ever fabricated.
           </p>
 
           <div className="overflow-x-auto">
@@ -1025,21 +1136,34 @@ export const StellarEvolutionWhitepaper: React.FC<StellarEvolutionWhitepaperProp
                   <th className="py-2 px-3">Subsystem Category</th>
                   <th className="py-2 px-3">Metric Specification</th>
                   <th className="py-2 px-3">Measurement Protocol</th>
-                  <th className="py-2 pl-3">Measured Value</th>
+                  <th className="py-2 pl-3">Measured Value &amp; Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10 text-slate-300">
-                {STELLAR_BENCHMARK_LEDGER.map(row => (
-                  <tr key={row.metricId} className="align-top">
-                    <td className="py-2.5 pr-3 text-slate-400">{row.metricId}</td>
-                    <td className="py-2.5 px-3 text-slate-100">{row.category}</td>
-                    <td className="py-2.5 px-3 font-sans">{row.metricName}</td>
-                    <td className="py-2.5 px-3 font-sans text-slate-400">{row.targetProtocol}</td>
-                    <td className="py-2.5 pl-3 text-amber-400 font-semibold whitespace-nowrap">
-                      {row.measuredValue}
-                    </td>
-                  </tr>
-                ))}
+                {benchmarkRows.map(row => {
+                  const isMeasured = row.verificationStatus === 'Empirically Measured';
+                  return (
+                    <tr key={row.metricId} className="align-top">
+                      <td className="py-2.5 pr-3 text-slate-400">{row.metricId}</td>
+                      <td className="py-2.5 px-3 text-slate-100">{row.category}</td>
+                      <td className="py-2.5 px-3 font-sans">{row.metricName}</td>
+                      <td className="py-2.5 px-3 font-sans text-slate-400">{row.targetProtocol}</td>
+                      <td
+                        className={`py-2.5 pl-3 font-semibold ${
+                          isMeasured ? 'text-emerald-400' : 'text-amber-400 whitespace-nowrap'
+                        }`}
+                      >
+                        <div>{row.measuredValue}</div>
+                        {isMeasured && row.measuredAtIso && (
+                          <div className="text-[10px] font-normal text-slate-400 mt-0.5">
+                            Verified {new Date(row.measuredAtIso).toLocaleTimeString()} · N=
+                            {row.sampleCount ?? 1}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -96,6 +96,8 @@ async function testConnection() {
 testConnection();
 
 const googleProvider = new GoogleAuthProvider();
+const profileSyncInFlight = new Map<string, Promise<void>>();
+const profileSyncedUids = new Set<string>();
 
 export async function signInWithGoogle(): Promise<User> {
   const credential = await signInWithPopup(auth, googleProvider);
@@ -104,6 +106,8 @@ export async function signInWithGoogle(): Promise<User> {
 }
 
 export async function signOutObservatory(): Promise<void> {
+  profileSyncedUids.clear();
+  profileSyncInFlight.clear();
   await signOut(auth);
 }
 
@@ -115,29 +119,58 @@ export function subscribeToAuth(callback: (user: User | null) => void) {
       } catch (e) {
         console.warn('User profile sync note:', e);
       }
+    } else {
+      profileSyncedUids.clear();
     }
     callback(user);
   });
 }
 
 export async function ensureUserProfile(user: User): Promise<void> {
-  const path = `users/${user.uid}`;
-  const userRef = doc(db, 'users', user.uid);
-  try {
-    const existing = await getDoc(userRef);
-    if (!existing.exists()) {
-      await setDoc(userRef, {
-        uid: user.uid,
-        email: user.email || 'researcher@observatory.org',
-        displayName: user.displayName || 'Cosmic Researcher',
-        photoURL: user.photoURL || '',
-        role: 'researcher',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
+  if (!user?.uid) return;
+  if (profileSyncedUids.has(user.uid)) return;
+
+  const existingPromise = profileSyncInFlight.get(user.uid);
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  const syncTask = (async () => {
+    const path = `users/${user.uid}`;
+    const userRef = doc(db, 'users', user.uid);
+
+    let exists = false;
+    try {
+      const existing = await getDoc(userRef);
+      exists = existing.exists();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, path);
     }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+
+    if (!exists) {
+      try {
+        await setDoc(userRef, {
+          uid: user.uid.slice(0, 128),
+          email: (user.email?.trim() || 'researcher@observatory.org').slice(0, 254),
+          displayName: (user.displayName?.trim() || 'Cosmic Researcher').slice(0, 120),
+          photoURL: (user.photoURL?.trim() || '').slice(0, 1024),
+          role: 'researcher',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, path);
+      }
+    }
+
+    profileSyncedUids.add(user.uid);
+  })();
+
+  profileSyncInFlight.set(user.uid, syncTask);
+  try {
+    await syncTask;
+  } finally {
+    profileSyncInFlight.delete(user.uid);
   }
 }
 

@@ -20,7 +20,8 @@ import {
   Activity,
   CheckCircle2,
   AlertTriangle,
-  BookOpen
+  BookOpen,
+  Orbit
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { Node, NodeType, Cluster } from '../types';
@@ -166,6 +167,7 @@ interface StellarNucleosynthesisWorkbenchProps {
   onSelectAtlasNode: (node: Node) => void;
   onFocusAtlasCluster: (clusterId: string) => void;
   onAddDiscoveryToAtlas: (node: Node) => void;
+  onOpenMergerLab?: () => void;
 }
 
 // Reusable module-scope math vectors to guarantee zero GC allocations in the WebGL loop
@@ -459,7 +461,8 @@ export const StellarNucleosynthesisWorkbench: React.FC<StellarNucleosynthesisWor
   clusters,
   onSelectAtlasNode,
   onFocusAtlasCluster,
-  onAddDiscoveryToAtlas
+  onAddDiscoveryToAtlas,
+  onOpenMergerLab
 }) => {
   const [selectedPresetId, setSelectedPresetId] = useState<string>(STELLAR_PRESETS[0].id);
   const [massSolar, setMassSolar] = useState<number>(STELLAR_PRESETS[0].massSolar);
@@ -1332,6 +1335,18 @@ export const StellarNucleosynthesisWorkbench: React.FC<StellarNucleosynthesisWor
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {onOpenMergerLab && (
+            <button
+              type="button"
+              onClick={onOpenMergerLab}
+              className="px-3 py-1.5 rounded bg-cyan-500/15 border border-cyan-400/50 hover:bg-cyan-500/25 text-xs font-semibold text-cyan-300 flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap"
+              title="Transition to Relativistic Black Hole & Gravitational-Wave Merger Lab"
+            >
+              <Orbit className="w-3.5 h-3.5 text-cyan-400" />
+              <span>GW Merger Lab</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setIsWhitepaperModalOpen(true)}
